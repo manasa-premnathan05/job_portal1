@@ -67,6 +67,20 @@
     --shadow-medium: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
     --shadow-large: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
 }
+/* Add this to your CSS */
+#fileNameDisplay {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(239, 246, 255, 0.5);
+    border-radius: 8px;
+    border: 1px dashed rgba(59, 130, 246, 0.3);
+    transition: all 0.3s ease;
+}
+
+#fileNameDisplay:hover {
+    background: rgba(219, 234, 254, 0.7);
+    border-color: rgba(59, 130, 246, 0.5);
+}
 
 * {
     margin: 0;
@@ -677,6 +691,19 @@ body {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
+/* Add this to your CSS */
+#uploadStatus .spinner {
+    width: 24px;
+    height: 24px;
+    border-width: 2px;
+    margin: 0 auto 0.5rem;
+}
+
+#uploadStatus .message {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    margin: 0;
+}
 </style>
     </head>
     <body>
@@ -823,21 +850,31 @@ body {
                                 <span>You need to upload a CV before applying. Please upload your CV below.</span>
                             </div>
                             <form id="cvUploadForm" class="space-y-4">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                <div class="file-upload">
-                                    <input type="file" name="cv" accept=".pdf" required>
-                                    <div class="file-upload-label">
-                                        <div>
-                                            <i class="fas fa-cloud-upload-alt"></i>
-                                            <div class="font-semibold">Upload your CV</div>
-                                            <div class="text-sm text-gray-500">PDF format, max 2MB</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-full">
-                                    <i class="fas fa-upload mr-2"></i>Upload CV
-                                </button>
-                            </form>
+    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+    <div class="file-upload">
+        <input type="file" name="cv" accept=".pdf" required>
+        <div class="file-upload-label">
+            <div>
+                <i class="fas fa-cloud-upload-alt"></i>
+                <div class="font-semibold">Upload your CV</div>
+                <div class="text-sm text-gray-500">PDF format, max 2MB</div>
+            </div>
+        </div>
+    </div>
+    <!-- Add this file name display -->
+    <div id="fileNameDisplay" class="text-sm text-gray-600 text-center hidden">
+        <i class="fas fa-file-pdf mr-1"></i>
+        <span id="selectedFileName"></span>
+    </div>
+    <!-- Status container -->
+    <div id="uploadStatus" class="text-center hidden">
+        <div class="spinner inline-block !w-6 !h-6 !border-2 mb-2"></div>
+        <p class="text-sm text-gray-600">Uploading your CV...</p>
+    </div>
+    <button type="submit" class="btn btn-primary w-full">
+        <i class="fas fa-upload mr-2"></i>Upload CV
+    </button>
+</form>
                         <?php else: ?>
                             <div class="message message-success">
                                 <i class="fas fa-check-circle"></i>
@@ -937,62 +974,122 @@ body {
             }
 
             // Handle CV Upload via AJAX
-            const cvUploadForm = document.getElementById('cvUploadForm');
-            if (cvUploadForm) {
-                cvUploadForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    console.log('CV Upload form submitted');
-                    
-                    const formData = new FormData(this);
-                    const spinner = document.getElementById('applySpinner');
-                    const message = document.getElementById('applyMessage');
+          // Handle CV Upload via AJAX
+const cvUploadForm = document.getElementById('cvUploadForm');
+if (cvUploadForm) {
+    // Add this to the file upload form handling
+const fileInput = document.querySelector('input[type="file"]');
+const fileNameDisplay = document.getElementById('fileNameDisplay');
+const selectedFileName = document.getElementById('selectedFileName');
 
-                    spinner.classList.remove('hidden');
-                    message.classList.add('hidden');
-
-                    fetch('upload_cv.php', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => {
-                        console.log('CV Upload response status:', response.status);
-                        return response.json();
-                    })
-                    .then(data => {
-                        console.log('CV Upload response data:', data);
-                        spinner.classList.add('hidden');
-                        
-                        if (data.success) {
-                            // Update modal content to show the apply form
-                            document.getElementById('applyModalContent').innerHTML = `
-                                <div class="message message-success">
-                                    <i class="fas fa-check-circle"></i>
-                                    <span>Your CV has been uploaded successfully! You can now apply for this position.</span>
-                                </div>
-                                <form id="applyForm" class="space-y-4">
-                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                    <input type="hidden" name="job_id" id="applyJobId" value="${currentJobId}">
-                                    <button type="submit" class="btn btn-success w-full">
-                                        <i class="fas fa-paper-plane mr-2"></i>Confirm Application
-                                    </button>
-                                </form>
-                            `;
-                            attachApplyFormListener();
-                        } else {
-                            message.classList.remove('hidden');
-                            message.className = 'message message-error';
-                            message.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>${data.error || 'Failed to upload CV.'}</span>`;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('CV Upload error:', error);
-                        spinner.classList.add('hidden');
-                        message.classList.remove('hidden');
-                        message.className = 'message message-error';
-                        message.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>An error occurred while uploading your CV.</span>';
-                    });
-                });
+if (fileInput) {
+    fileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            // Show the selected file name
+            selectedFileName.textContent = file.name;
+            fileNameDisplay.classList.remove('hidden');
+            
+            const fileSizeMB = file.size / (1024 * 1024);
+            if (fileSizeMB > 2) {
+                alert('File size must be less than 2MB');
+                this.value = '';
+                fileNameDisplay.classList.add('hidden');
             }
+            
+            const fileType = file.type;
+            if (fileType !== 'application/pdf') {
+                alert('Only PDF files are allowed');
+                this.value = '';
+                fileNameDisplay.classList.add('hidden');
+            }
+        } else {
+            fileNameDisplay.classList.add('hidden');
+        }
+    });
+}
+    cvUploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        console.log('CV Upload form submitted');
+        
+        const formData = new FormData(this);
+        const spinner = document.getElementById('applySpinner');
+        const message = document.getElementById('applyMessage');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const submitBtn = this.querySelector('button[type="submit"]');
+
+        // Show uploading status
+        uploadStatus.classList.remove('hidden');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Uploading...';
+
+        fetch('upload_cv.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            console.log('CV Upload response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('CV Upload response data:', data);
+            
+            // Hide uploading status
+            uploadStatus.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-upload mr-2"></i>Upload CV';
+
+            if (data.success) {
+                // Show success message temporarily
+                uploadStatus.innerHTML = `
+                    <div class="message message-success !py-2 !px-3 !text-sm">
+                        <i class="fas fa-check-circle"></i>
+                        <span>CV uploaded successfully!</span>
+                    </div>
+                `;
+                uploadStatus.classList.remove('hidden');
+
+                // Update modal content to show the apply form after a delay
+                setTimeout(() => {
+                    document.getElementById('applyModalContent').innerHTML = `
+                        <div class="message message-success">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Your CV has been uploaded successfully! You can now apply for this position.</span>
+                        </div>
+                        <form id="applyForm" class="space-y-4">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                            <input type="hidden" name="job_id" id="applyJobId" value="${currentJobId}">
+                            <div>
+                                <label for="coverLetter" class="block text-sm font-medium text-gray-700 mb-1">Cover Letter</label>
+                                <textarea id="coverLetter" name="cover_letter" class="form-control" rows="6" 
+                                          placeholder="Write a customized cover letter for this position..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-success w-full">
+                                <i class="fas fa-paper-plane mr-2"></i>Confirm Application
+                            </button>
+                        </form>
+                    `;
+                    attachApplyFormListener();
+                }, 1500);
+            } else {
+                message.classList.remove('hidden');
+                message.className = 'message message-error';
+                message.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>${data.error || 'Failed to upload CV.'}</span>`;
+            }
+        })
+        .catch(error => {
+            console.error('CV Upload error:', error);
+            // Hide uploading status
+            uploadStatus.classList.add('hidden');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-upload mr-2"></i>Upload CV';
+            
+            message.classList.remove('hidden');
+            message.className = 'message message-error';
+            message.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>An error occurred while uploading your CV.</span>';
+        });
+    });
+}
 
             // Handle Job Application via AJAX
             // Handle Job Application via AJAX
