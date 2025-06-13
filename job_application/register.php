@@ -114,18 +114,24 @@ if (empty($_SESSION['csrf_token'])) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        :root {
-            --primary: #4a6bff;
-            --primary-dark: #3a56d4;
-            --secondary: #3f37c9;
-            --light: #f8f9fa;
-            --dark: #2d3748;
-            --gray: #718096;
-            --light-gray: #e2e8f0;
-            --danger: #e53e3e;
-            --success: #38a169;
-            --warning: #dd6b20;
-            --transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+       :root {
+            --primary: #5a67d8; /* Vibrant indigo */
+            --primary-dark: #434190; /* Darker indigo */
+            --secondary: rgb(56, 27, 41); /* Vivid pink */
+            --secondary-dark: rgb(44, 19, 23); /* Darker pink */
+            --accent: #f6ad55; /* Warm orange */
+            --success: #48bb78; /* Fresh green */
+            --danger: rgb(41, 24, 24); /* Soft red */
+            --light: #f7fafc; /* Light background */
+            --dark: #2d3748; /* Dark text */
+            --gray: #718096; /* Muted gray */
+            --light-gray: #e2e8f0; /* Light gray */
+            --gradient-primary: linear-gradient(135deg, #5a67d8 0%, #434190 100%);
+            --gradient-secondary: linear-gradient(135deg, rgb(179, 138, 84) 0%, rgb(105, 83, 35) 100%);
+            --gradient-accent: linear-gradient(135deg, rgb(168, 136, 96) 0%, #ed8936 100%);
+            --box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            --box-shadow-hover: 0 15px 30px rgba(0, 0, 0, 0.15);
+            --transition: all 0.3s ease-in-out;
         }
 
         * {
@@ -136,21 +142,40 @@ if (empty($_SESSION['csrf_token'])) {
         }
 
         body {
-            background-color: #f7fafc;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e2e8f0 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxkZWZzPjxwYXR0ZXJuIGlkPSJwYXR0ZXJuIiB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiIHBhdHRlcm5UcmFuc2Zvcm09InJvdGF0ZSg0NSkiPjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0icmdiYSgyMzgsMjQyLDI1NSwwLjAzKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==');
+            padding: 20px;
+            overflow-x: hidden;
+            position: relative;
+            animation: fadeIn 1.2s ease-out;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 30%, rgba(90, 103, 216, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(237, 100, 166, 0.1) 0%, transparent 50%);
+            z-index: -1;
+            opacity: 0;
+            animation: fadeInOverlay 2s ease-out forwards;
         }
 
         .header {
-            position: absolute;
-            top: 30px;
+            position: fixed;
+            top: 20px;
             left: 0;
             width: 100%;
             text-align: center;
             z-index: 10;
+            opacity: 0;
+            animation: slideInFromTop 0.8s ease-out 0.2s forwards;
         }
 
         .logo-container {
@@ -161,6 +186,11 @@ if (empty($_SESSION['csrf_token'])) {
             width: 120px;
             height: auto;
             margin-bottom: 5px;
+            transition: transform 0.3s ease;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
         }
 
         .logo-title {
@@ -168,12 +198,16 @@ if (empty($_SESSION['csrf_token'])) {
             font-weight: 700;
             color: var(--dark);
             margin-bottom: 0;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.4s forwards;
         }
 
         .logo-subtitle {
             font-size: 12px;
             color: var(--gray);
             font-weight: 500;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.6s forwards;
         }
 
         .register-container {
@@ -181,16 +215,19 @@ if (empty($_SESSION['csrf_token'])) {
             max-width: 900px;
             background: white;
             border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            box-shadow: var(--box-shadow);
             overflow: hidden;
             display: flex;
             margin: 100px 20px 20px;
+            opacity: 0;
+            transform: scale(0.98);
+            animation: containerReveal 0.8s ease-out 0.6s forwards;
         }
 
         .welcome-panel {
             width: 40%;
             padding: 50px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: var(--gradient-primary);
             color: white;
             display: flex;
             flex-direction: column;
@@ -206,8 +243,9 @@ if (empty($_SESSION['csrf_token'])) {
             right: -50%;
             width: 100%;
             height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
             z-index: 1;
+            animation: subtleGlow 6s ease-in-out infinite;
         }
 
         .welcome-content {
@@ -220,6 +258,8 @@ if (empty($_SESSION['csrf_token'])) {
             font-weight: 700;
             margin-bottom: 15px;
             color: white;
+            opacity: 0;
+            animation: slideInFromLeft 0.6s ease-out 0.8s forwards;
         }
 
         .welcome-subtitle {
@@ -228,17 +268,32 @@ if (empty($_SESSION['csrf_token'])) {
             margin-bottom: 30px;
             font-weight: 400;
             line-height: 1.6;
+            opacity: 0;
+            animation: slideInFromLeft 0.6s ease-out 0.9s forwards;
         }
 
         .features-list {
             list-style: none;
             margin-bottom: 40px;
+            opacity: 0;
+            animation: slideInFromLeft 0.6s ease-out 1s forwards;
         }
 
         .features-list li {
             margin-bottom: 15px;
             display: flex;
             align-items: center;
+            opacity: 0;
+            transform: translateX(-20px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .features-list li:nth-child(1) { animation: listItemReveal 0.6s ease-out 1.1s forwards; }
+        .features-list li:nth-child(2) { animation: listItemReveal 0.6s ease-out 1.2s forwards; }
+        .features-list li:nth-child(3) { animation: listItemReveal 0.6s ease-out 1.3s forwards; }
+
+        .features-list li:hover {
+            transform: translateX(5px);
         }
 
         .features-list li::before {
@@ -252,6 +307,11 @@ if (empty($_SESSION['csrf_token'])) {
             line-height: 24px;
             margin-right: 12px;
             font-size: 12px;
+            transition: background 0.3s ease;
+        }
+
+        .features-list li:hover::before {
+            background: var(--accent);
         }
 
         .login-link {
@@ -261,14 +321,37 @@ if (empty($_SESSION['csrf_token'])) {
             display: inline-flex;
             align-items: center;
             transition: var(--transition);
+            opacity: 0;
+            animation: slideInFromLeft 0.6s ease-out 1.4s forwards;
+            position: relative;
+        }
+
+        .login-link::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        .login-link:hover::after {
+            width: 100%;
         }
 
         .login-link:hover {
-            text-decoration: underline;
+            color: var(--accent);
         }
 
         .login-link i {
             margin-left: 8px;
+            transition: transform 0.3s ease;
+        }
+
+        .login-link:hover i {
+            transform: translateX(5px);
         }
 
         .form-panel {
@@ -284,18 +367,33 @@ if (empty($_SESSION['csrf_token'])) {
             font-weight: 700;
             color: var(--dark);
             margin-bottom: 5px;
+            opacity: 0;
+            animation: slideInFromRight 0.6s ease-out 0.8s forwards;
         }
 
         .form-subtitle {
             font-size: 14px;
             color: var(--gray);
             margin-bottom: 30px;
+            opacity: 0;
+            animation: slideInFromRight 0.6s ease-out 0.9s forwards;
         }
 
         .form-group {
             margin-bottom: 20px;
             position: relative;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: formGroupReveal 0.6s ease-out forwards;
         }
+
+        .form-group:nth-child(1) { animation-delay: 1s; }
+        .form-group:nth-child(2) { animation-delay: 1.1s; }
+        .form-group:nth-child(3) { animation-delay: 1.2s; }
+        .form-group:nth-child(4) { animation-delay: 1.3s; }
+        .form-group:nth-child(5) { animation-delay: 1.4s; }
+        .form-group:nth-child(6) { animation-delay: 1.5s; }
+        .form-group:nth-child(7) { animation-delay: 1.6s; }
 
         .form-label {
             display: block;
@@ -303,6 +401,7 @@ if (empty($_SESSION['csrf_token'])) {
             font-size: 14px;
             font-weight: 500;
             color: var(--dark);
+            transition: color 0.3s ease;
         }
 
         .form-label.required::after {
@@ -314,7 +413,7 @@ if (empty($_SESSION['csrf_token'])) {
         .form-input {
             width: 100%;
             padding: 14px 16px;
-            border: 1px solid var(--light-gray);
+            border: 2px solid var(--light-gray);
             border-radius: 8px;
             font-size: 14px;
             transition: var(--transition);
@@ -324,11 +423,16 @@ if (empty($_SESSION['csrf_token'])) {
         .form-input:focus {
             border-color: var(--primary);
             outline: none;
-            box-shadow: 0 0 0 3px rgba(74, 107, 255, 0.2);
+            box-shadow: 0 0 0 3px rgba(90, 103, 216, 0.1);
+        }
+
+        .form-input:hover {
+            border-color: var(--primary-dark);
         }
 
         .form-input.error {
             border-color: var(--danger);
+            animation: errorShake 0.5s ease-in-out;
         }
 
         .error-message {
@@ -336,6 +440,12 @@ if (empty($_SESSION['csrf_token'])) {
             font-size: 13px;
             margin-top: 6px;
             display: block;
+            opacity: 0;
+            animation: fadeInUp 0.4s ease-out forwards;
+        }
+
+        .error-message i {
+            margin-right: 5px;
         }
 
         .password-container {
@@ -349,6 +459,11 @@ if (empty($_SESSION['csrf_token'])) {
             transform: translateY(-50%);
             cursor: pointer;
             color: var(--gray);
+            transition: color 0.3s ease;
+        }
+
+        .toggle-password:hover {
+            color: var(--primary);
         }
 
         .password-strength {
@@ -368,7 +483,7 @@ if (empty($_SESSION['csrf_token'])) {
             height: 100%;
             width: 0;
             background: var(--danger);
-            transition: var(--transition);
+            transition: width 0.4s ease, background 0.4s ease;
         }
 
         .password-strength[data-strength="1"]::after {
@@ -378,7 +493,7 @@ if (empty($_SESSION['csrf_token'])) {
 
         .password-strength[data-strength="2"]::after {
             width: 50%;
-            background: var(--warning);
+            background: var(--accent);
         }
 
         .password-strength[data-strength="3"]::after {
@@ -394,7 +509,7 @@ if (empty($_SESSION['csrf_token'])) {
         .submit-btn {
             width: 100%;
             padding: 14px;
-            background: var(--primary);
+            background: var(--gradient-primary);
             color: white;
             border: none;
             border-radius: 8px;
@@ -404,13 +519,14 @@ if (empty($_SESSION['csrf_token'])) {
             transition: var(--transition);
             margin-top: 10px;
             position: relative;
-            overflow: hidden;
+            opacity: 0;
+            animation: slideInFromRight 0.6s ease-out 1.7s forwards;
         }
 
         .submit-btn:hover {
-            background: var(--primary-dark);
+            background: var(--gradient-secondary);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(74, 107, 255, 0.3);
+            box-shadow: var(--box-shadow-hover);
         }
 
         .submit-btn:active {
@@ -420,8 +536,8 @@ if (empty($_SESSION['csrf_token'])) {
         .submit-btn:disabled {
             background: var(--light-gray);
             cursor: not-allowed;
-            transform: none !important;
-            box-shadow: none !important;
+            transform: none;
+            box-shadow: none;
         }
 
         .spinner {
@@ -432,11 +548,8 @@ if (empty($_SESSION['csrf_token'])) {
             border-radius: 50%;
             border-top-color: white;
             animation: spin 1s ease-in-out infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+            margin: 0 10px 0 0;
+            vertical-align: middle;
         }
 
         .form-footer {
@@ -444,6 +557,8 @@ if (empty($_SESSION['csrf_token'])) {
             text-align: center;
             font-size: 14px;
             color: var(--gray);
+            opacity: 0;
+            animation: slideInFromRight 0.6s ease-out 1.8s forwards;
         }
 
         .form-footer a {
@@ -451,10 +566,26 @@ if (empty($_SESSION['csrf_token'])) {
             font-weight: 500;
             text-decoration: none;
             transition: var(--transition);
+            position: relative;
+        }
+
+        .form-footer a::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--secondary);
+            transition: width 0.3s ease;
+        }
+
+        .form-footer a:hover::after {
+            width: 100%;
         }
 
         .form-footer a:hover {
-            text-decoration: underline;
+            color: var(--secondary);
         }
 
         .general-error {
@@ -462,21 +593,145 @@ if (empty($_SESSION['csrf_token'])) {
             font-size: 14px;
             margin-bottom: 20px;
             padding: 12px;
-            background: rgba(229, 62, 62, 0.1);
+            background: rgba(245, 101, 101, 0.1);
             border-radius: 8px;
             text-align: center;
-            animation: fadeInUp 0.5s;
+            opacity: 0;
+            animation: errorReveal 0.6s ease-out forwards;
+        }
+
+        .general-error i {
+            margin-right: 5px;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInOverlay {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideInFromTop {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInFromLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInFromRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes containerReveal {
+            from {
+                opacity: 0;
+                transform: scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes formGroupReveal {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes listItemReveal {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes subtleGlow {
+            0% {
+                opacity: 0.4;
+                transform: rotate(0deg);
+            }
+            50% {
+                opacity: 0.7;
+                transform: rotate(180deg);
+            }
+            100% {
+                opacity: 0.4;
+                transform: rotate(360deg);
+            }
         }
 
         @keyframes fadeInUp {
-            from { 
-                opacity: 0; 
-                transform: translateY(20px); 
+            from {
+                opacity: 0;
+                transform: translateY(10px);
             }
-            to { 
-                opacity: 1; 
-                transform: translateY(0); 
+            to {
+                opacity: 1;
+                transform: translateY(0);
             }
+        }
+
+        @keyframes errorReveal {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes errorShake {
+            0%, 100% {
+                transform: translateX(0);
+            }
+            20%, 60% {
+                transform: translateX(-4px);
+            }
+            40%, 80% {
+                transform: translateX(4px);
+            }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         /* Responsive design */
@@ -514,9 +769,8 @@ if (empty($_SESSION['csrf_token'])) {
             }
 
             .register-container {
-                border-radius: 0;
-                margin: 0;
-                margin-top: 70px;
+                border-radius: 8px;
+                margin: 70px 10px 10px;
                 min-height: calc(100vh - 70px);
             }
 

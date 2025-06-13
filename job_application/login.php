@@ -178,90 +178,118 @@ if (empty($_SESSION['csrf_token'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spectra Compunet - Job Portal</title>
+       <title>Spectra Compunet - Job Portal</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
-            --primary: #4a6bff;
-            --primary-dark: #3a56d4;
-            --secondary: #3f37c9;
-            --light: #f8f9fa;
-            --dark: #2d3748;
-            --gray: #718096;
-            --light-gray: #e2e8f0;
-            --danger: #e53e3e;
-            --success: #38a169;
+            --primary: #5a67d8; /* Vibrant indigo */
+            --primary-dark: #434190; /* Darker indigo */
+            --secondary:rgb(56, 27, 41); /* Vivid pink */
+            --secondary-dark:rgb(44, 19, 23); /* Darker pink */
+            --accent: #f6ad55; /* Warm orange */
+            --success: #48bb78; /* Fresh green */
+            --danger:rgb(41, 24, 24); /* Soft red */
+            --light: #f7fafc; /* Light background */
+            --dark: #2d3748; /* Dark text */
+            --gray: #718096; /* Muted gray */
+            --light-gray: #e2e8f0; /* Light gray */
+            --gradient-primary: linear-gradient(135deg, #5a67d8 0%, #434190 100%);
+            --gradient-secondary: linear-gradient(135deg,rgb(179, 138, 84) 0%,rgb(105, 83, 35) 100%);
+            --gradient-accent: linear-gradient(135deg,rgb(168, 136, 96) 0%, #ed8936 100%);
+            --box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            --box-shadow-hover: 0 15px 30px rgba(0, 0, 0, 0.15);
             --transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
         }
-       
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         }
-       
+
         body {
-            background-color: #f7fafc;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e2e8f0 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            padding: 20px;
             overflow-x: hidden;
-            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxkZWZzPjxwYXR0ZXJuIGlkPSJwYXR0ZXJuIiB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiIHBhdHRlcm5UcmFuc2Zvcm09InJvdGF0ZSg0NSkiPjxyZWN0IHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgZmlsbD0icmdiYSgyMzgsMjQyLDI1NSwwLjAzKSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNwYXR0ZXJuKSIvPjwvc3ZnPg==');
+            position: relative;
         }
-        .submit-btn .spinner {
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 8px;
-}
-       
-        .header {
+
+        body::before {
+            content: '';
             position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 30%, rgba(90, 103, 216, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(237, 100, 166, 0.1) 0%, transparent 50%);
+            z-index: -1;
+        }
+
+        .header {
+            position: fixed;
             top: 20px;
             left: 0;
             width: 100%;
             text-align: center;
             z-index: 10;
+            animation: fadeInDown 0.8s ease-out;
         }
-       
+
         .logo-container {
             margin-bottom: 10px;
         }
-       
+
         .logo {
             width: 120px;
             height: auto;
             margin-bottom: 5px;
+            transition: transform 0.3s ease;
+            animation: pulse 2s infinite;
         }
-       
+
+        .logo:hover {
+            transform: scale(1.1);
+        }
+
         .logo-title {
             font-size: 20px;
             font-weight: 700;
             color: var(--dark);
             margin-bottom: 0;
+            animation: fadeIn 1s ease-out 0.2s forwards;
+            opacity: 0;
         }
-       
+
         .logo-subtitle {
             font-size: 12px;
             color: var(--gray);
             font-weight: 500;
+            animation: fadeIn 1s ease-out 0.4s forwards;
+            opacity: 0;
         }
-       
+
         .login-container {
             width: 100%;
             max-width: 1100px;
             min-height: 600px;
             background: white;
             border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            box-shadow: var(--box-shadow);
             overflow: hidden;
             display: flex;
             position: relative;
-            margin: 20px;
             margin-top: 100px;
+            animation: zoomIn 0.8s ease-out;
         }
-       
+
         .panel {
             width: 50%;
             padding: 60px;
@@ -272,13 +300,13 @@ if (empty($_SESSION['csrf_token'])) {
             transition: var(--transition);
             overflow: hidden;
         }
-       
+
         .welcome-panel {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: var(--gradient-primary);
             color: white;
             z-index: 1;
         }
-       
+
         .welcome-panel::before {
             content: '';
             position: absolute;
@@ -286,46 +314,52 @@ if (empty($_SESSION['csrf_token'])) {
             right: -50%;
             width: 100%;
             height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
             z-index: -1;
+            animation: glow 5s infinite ease-in-out;
         }
-       
+
         .form-panel {
             background: white;
         }
-       
+
         .welcome-title {
             font-size: 28px;
             font-weight: 700;
             margin-bottom: 15px;
             color: white;
-            opacity: 1;
-            transform: translateX(0);
+            animation: fadeInUp 0.6s ease-out;
         }
-       
+
         .welcome-subtitle {
             font-size: 16px;
             opacity: 0.9;
             margin-bottom: 30px;
             font-weight: 400;
             line-height: 1.6;
-            opacity: 1;
-            transform: translateX(0);
+            animation: fadeInUp 0.6s ease-out 0.2s forwards;
+            opacity: 0;
         }
-       
+
         .features-list {
             list-style: none;
             margin-bottom: 40px;
-            opacity: 1;
-            transform: translateX(0);
+            animation: fadeInUp 0.6s ease-out 0.4s forwards;
+            opacity: 0;
         }
-       
+
         .features-list li {
             margin-bottom: 15px;
             display: flex;
             align-items: center;
+            transition: transform 0.3s ease, color 0.3s ease;
         }
-       
+
+        .features-list li:hover {
+            transform: translateX(10px);
+            color: var(--accent);
+        }
+
         .features-list li::before {
             content: '✓';
             display: inline-block;
@@ -337,10 +371,15 @@ if (empty($_SESSION['csrf_token'])) {
             line-height: 24px;
             margin-right: 12px;
             font-size: 12px;
+            transition: background 0.3s ease;
         }
-       
+
+        .features-list li:hover::before {
+            background: var(--accent);
+        }
+
         .toggle-btn {
-            background: rgba(255,255,255,0.15);
+            background: var(--gradient-secondary);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -351,101 +390,136 @@ if (empty($_SESSION['csrf_token'])) {
             display: inline-flex;
             align-items: center;
             transition: var(--transition);
-            backdrop-filter: blur(5px);
-            opacity: 1;
-            transform: translateX(0);
+            animation: fadeInUp 0.6s ease-out 0.6s forwards;
+            opacity: 0;
+            position: relative;
+            overflow: hidden;
         }
-       
+
+        .toggle-btn::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .toggle-btn:hover::after {
+            left: 100%;
+        }
+
         .toggle-btn:hover {
-            background: rgba(255,255,255,0.25);
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: var(--box-shadow-hover);
         }
-       
+
         .toggle-btn i {
             margin-left: 8px;
             font-size: 16px;
+            transition: transform 0.3s ease;
         }
-       
-        .form-container {
-    width: 100%;
-    max-width: 400px;
-    margin: 0 auto;
-    transition: var(--transition);
-    position: relative;
-    min-height: 400px;
-}
-       
-        .user-form, 
-.admin-form {
-    width: 100%;
-    transition: var(--transition);
-    position: absolute;
-    top: 0;
-    left: 0;
-    opacity: 0;
-    visibility: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 20px 0;
-}
-.user-form {
-    opacity: 1;
-    visibility: visible;
-    position: relative;
-}
 
-.admin-form.active {
-    opacity: 1;
-    visibility: visible;
-    position: relative;
-}
-       
+        .toggle-btn:hover i {
+            transform: translateX(5px);
+        }
+
+        .form-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            transition: var(--transition);
+            position: relative;
+            min-height: 400px;
+        }
+
+        .user-form, 
+        .admin-form {
+            width: 100%;
+            transition: var(--transition);
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 20px 0;
+        }
+
+        .user-form {
+            opacity: 1;
+            visibility: visible;
+            position: relative;
+        }
+
+        .admin-form.active {
+            opacity: 1;
+            visibility: visible;
+            position: relative;
+        }
+
         .form-title {
             font-size: 24px;
             font-weight: 700;
             color: var(--dark);
             margin-bottom: 5px;
+            animation: fadeInUp 0.6s ease-out;
         }
-       
+
         .form-subtitle {
             font-size: 14px;
             color: var(--gray);
             margin-bottom: 30px;
+            animation: fadeInUp 0.6s ease-out 0.2s forwards;
+            opacity: 0;
         }
-       
+
         .form-group {
             margin-bottom: 20px;
+            animation: slideInUp 0.6s ease forwards;
         }
-       
+
+        .form-group:nth-child(1) { animation-delay: 0.1s; }
+        .form-group:nth-child(2) { animation-delay: 0.2s; }
+
         .form-label {
             display: block;
             margin-bottom: 8px;
             font-size: 14px;
             font-weight: 500;
             color: var(--dark);
+            transition: color 0.3s ease;
         }
-       
+
         .form-input {
             width: 100%;
             padding: 14px 16px;
-            border: 1px solid var(--light-gray);
+            border: 2px solid var(--light-gray);
             border-radius: 8px;
             font-size: 14px;
             transition: var(--transition);
             background: white;
         }
-       
+
         .form-input:focus {
             border-color: var(--primary);
             outline: none;
-            box-shadow: 0 0 0 3px rgba(74, 107, 255, 0.2);
+            box-shadow: 0 0 0 3px rgba(90, 103, 216, 0.2);
+            transform: translateY(-2px);
         }
-       
+
+        .form-input:hover {
+            border-color: var(--secondary);
+        }
+
         .password-container {
             position: relative;
         }
-       
+
         .toggle-password {
             position: absolute;
             right: 12px;
@@ -453,12 +527,18 @@ if (empty($_SESSION['csrf_token'])) {
             transform: translateY(-50%);
             cursor: pointer;
             color: var(--gray);
+            transition: color 0.3s ease, transform 0.3s ease;
         }
-       
+
+        .toggle-password:hover {
+            color: var(--primary);
+            transform: translateY(-50%) scale(1.2);
+        }
+
         .submit-btn {
             width: 100%;
             padding: 14px;
-            background: var(--primary);
+            background: var(--gradient-primary);
             color: white;
             border: none;
             border-radius: 8px;
@@ -469,14 +549,16 @@ if (empty($_SESSION['csrf_token'])) {
             margin-top: 10px;
             position: relative;
             overflow: hidden;
+            animation: fadeInUp 0.6s ease-out 0.4s forwards;
+            opacity: 0;
         }
-       
+
         .submit-btn:hover {
-            background: var(--primary-dark);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(74, 107, 255, 0.3);
+            background: var(--gradient-secondary);
+            transform: translateY(-3px);
+            box-shadow: var(--box-shadow-hover);
         }
-       
+
         .submit-btn::after {
             content: '';
             position: absolute;
@@ -490,62 +572,61 @@ if (empty($_SESSION['csrf_token'])) {
             transform: scale(1, 1) translate(-50%);
             transform-origin: 50% 50%;
         }
-       
+
         .submit-btn:focus:not(:active)::after {
             animation: ripple 0.6s ease-out;
         }
-       
-        @keyframes ripple {
-            0% {
-                transform: scale(0, 0);
-                opacity: 0.5;
-            }
-            100% {
-                transform: scale(20, 20);
-                opacity: 0;
-            }
+
+        .submit-btn:disabled {
+            background: var(--light-gray);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
-       
+
         .form-footer {
             margin-top: 20px;
             text-align: center;
             font-size: 14px;
             color: var(--gray);
+            animation: fadeInUp 0.6s ease-out 0.6s forwards;
+            opacity: 0;
         }
-       
+
         .form-footer a {
             color: var(--primary);
             font-weight: 500;
             text-decoration: none;
             transition: var(--transition);
         }
-       
+
         .form-footer a:hover {
+            color: var(--secondary);
             text-decoration: underline;
         }
-       
+
         .error-message {
             color: var(--danger);
             font-size: 14px;
             margin-bottom: 20px;
             padding: 12px;
-            background: rgba(229, 62, 62, 0.1);
+            background: rgba(245, 101, 101, 0.1);
             border-radius: 8px;
             text-align: center;
-            animation: fadeInUp 0.5s;
+            animation: shake 0.5s ease-in-out;
         }
-       
+
         .admin-form.active {
             opacity: 1;
             visibility: visible;
         }
-       
+
         .user-form.inactive {
             opacity: 0;
             visibility: hidden;
             position: absolute;
         }
-       
+
         /* Modal styles */
         .modal {
             display: none;
@@ -561,19 +642,19 @@ if (empty($_SESSION['csrf_token'])) {
             animation: fadeIn 0.3s;
             backdrop-filter: blur(3px);
         }
-       
+
         .modal-content {
             background: white;
             border-radius: 12px;
             width: 100%;
             max-width: 400px;
             padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            box-shadow: var(--box-shadow);
             position: relative;
             animation: slideUp 0.4s;
             margin: 20px;
         }
-       
+
         .close-modal {
             position: absolute;
             top: 20px;
@@ -583,107 +664,42 @@ if (empty($_SESSION['csrf_token'])) {
             color: var(--gray);
             transition: var(--transition);
         }
-       
+
         .close-modal:hover {
             color: var(--dark);
             transform: rotate(90deg);
         }
-       
-        /* Responsive design */
-        @media (max-width: 992px) {
-            .login-container {
-                flex-direction: column;
-                max-width: 500px;
-                min-height: auto;
-                margin-top: 120px;
-            }
-           
-            .panel {
-                width: 100%;
-                padding: 40px;
-            }
-           
-            .welcome-panel {
-                padding-bottom: 60px;
-            }
-           
-            .form-container {
-                position: relative;
-                margin: 0 auto;
-                padding: 20px 0;
-            }
-           
-            .admin-form {
-                display: none;
-            }
-            .user-form, 
-    .admin-form {
-        position: relative;
-        min-height: auto;
-        padding: 0;
-    }
-           
-            .user-form.inactive {
-                display: none;
-            }
 
-             
-    .admin-form.active {
-        display: flex;
-    }
-    
-    .user-form.inactive {
-        display: none;
-    }
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
         }
-       
-        @media (max-width: 576px) {
-            .header {
-                top: 10px;
-            }
-           
-            .logo {
-                width: 100px;
-            }
-           
-            .logo-title {
-                font-size: 18px;
-            }
-           
-            .login-container {
-                border-radius: 0;
-                min-height: 100vh;
-                margin: 0;
-                margin-top: 80px;
-            }
-           
-            .panel {
-                padding: 30px 20px;
-            }
-           
-            .welcome-title {
-                font-size: 24px;
-            }
-           
-            .form-title {
-                font-size: 20px;
-            }
-           
-            .form-input {
-                padding: 12px 14px;
-            }
-           
-            .submit-btn {
-                padding: 12px;
-            }
-        }
-       
+
         /* Animations */
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
         }
-       
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -694,7 +710,18 @@ if (empty($_SESSION['csrf_token'])) {
                 transform: translateY(0);
             }
         }
-       
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         @keyframes slideUp {
             from {
                 transform: translateY(30px);
@@ -705,21 +732,154 @@ if (empty($_SESSION['csrf_token'])) {
                 opacity: 1;
             }
         }
-       
-        /* Loading spinner */
-        .spinner {
-            display: none;
-            width: 24px;
-            height: 24px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin: 0 auto;
+
+        @keyframes zoomIn {
+            from {
+                transform: scale(0.9);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
-       
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes glow {
+            0% {
+                opacity: 0.5;
+                transform: rotate(0deg);
+            }
+            50% {
+                opacity: 1;
+                transform: rotate(180deg);
+            }
+            100% {
+                opacity: 0.5;
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(0, 0);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(20, 20);
+                opacity: 0;
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% {
+                transform: translateX(0);
+            }
+            10%, 30%, 50%, 70%, 90% {
+                transform: translateX(-5px);
+            }
+            20%, 40%, 60%, 80% {
+                transform: translateX(5px);
+            }
+        }
+
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+
+        /* Responsive design */
+        @media (max-width: 992px) {
+            .login-container {
+                flex-direction: column;
+                max-width: 500px;
+                min-height: auto;
+                margin-top: 120px;
+            }
+
+            .panel {
+                width: 100%;
+                padding: 40px;
+            }
+
+            .welcome-panel {
+                padding-bottom: 60px;
+            }
+
+            .form-container {
+                position: relative;
+                margin: 0 auto;
+                padding: 20px 0;
+            }
+
+            .admin-form {
+                display: none;
+            }
+
+            .user-form, 
+            .admin-form {
+                position: relative;
+                min-height: auto;
+                padding: 0;
+            }
+
+            .user-form.inactive {
+                display: none;
+            }
+
+            .admin-form.active {
+                display: flex;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .header {
+                top: 10px;
+            }
+
+            .logo {
+                width: 100px;
+            }
+
+            .logo-title {
+                font-size: 18px;
+            }
+
+            .login-container {
+                border-radius: 8px;
+                min-height: calc(100vh - 80px);
+                margin: 80px 10px 10px;
+            }
+
+            .panel {
+                padding: 30px 20px;
+            }
+
+            .welcome-title {
+                font-size: 24px;
+            }
+
+            .form-title {
+                font-size: 20px;
+            }
+
+            .form-input {
+                padding: 12px 14px;
+            }
+
+            .submit-btn {
+                padding: 12px;
+            }
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">

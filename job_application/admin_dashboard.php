@@ -24,10 +24,7 @@ try {
     
     $conn->set_charset("utf8mb4");
     
-    // Drop existing table if it has foreign key constraints
-    $conn->query("DROP TABLE IF EXISTS `job_postings`");
-    
-    // Create table without foreign key constraints
+    // Create table if it doesn't exist (without dropping)
     $table_sql = "CREATE TABLE IF NOT EXISTS `job_postings` (
         `job_id` int(11) NOT NULL AUTO_INCREMENT,
         `title` varchar(100) NOT NULL,
@@ -43,7 +40,8 @@ try {
         `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
         `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
         `job_categories` enum('Marketing','Sales','Education','Development','Tally Experts','Other') DEFAULT NULL,
-        PRIMARY KEY (`job_id`)
+        PRIMARY KEY (`job_id`),
+        CONSTRAINT `job_postings_ibfk_2` FOREIGN KEY (`posted_by`) REFERENCES `admins` (`admin_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
     
     if (!$conn->query($table_sql)) {
@@ -213,6 +211,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
                 } else {
                     throw new Exception('Failed to update job status: ' . $stmt->error);
+                }
+                $stmt->close();
+                break;
+                
+            default:
+                throw new Exception('Invalid action');
+        }
+    } catch (Exception $e) {
+        error_log("Database operation error: " . $e->getMessage());
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+// Handle POST requests for updating application status
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    header('Content-Type: application/json');
+    
+    // CSRF Protection
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Invalid CSRF token']);
+        exit;
+    }
+    
+    $action = $_POST['action'];
+    
+    try {
+        switch ($action) {
+            case 'update_application_status':
+                if (empty($_POST['application_id']) || empty($_POST['status'])) {
+                    throw new Exception('Application ID and status are required');
+                }
+                
+                $application_id = (int)$_POST['application_id'];
+                $status = validateInput($_POST['status']);
+                
+                $stmt = $conn->prepare("UPDATE applications SET status = ? WHERE application_id = ?");
+                
+                if (!$stmt) {
+                    throw new Exception("Prepare failed: " . $conn->error);
+                }
+                
+                $stmt->bind_param("si", $status, $application_id);
+                
+                if ($stmt->execute()) {
+                    echo json_encode(['success' => true, 'message' => 'Status updated successfully']);
+                } else {
+                    throw new Exception('Failed to update status: ' . $stmt->error);
                 }
                 $stmt->close();
                 break;
@@ -802,6 +849,12 @@ $csrf_token = generateCSRFToken();
                                 Manage Jobs
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link sidebar-link" href="#" data-section="view-applications">
+                              <i class="fas fa-users me-2"></i>
+                                View Applications
+                            </a>
+                       </li>
                     </ul>
                 </div>
             </nav>
@@ -996,6 +1049,9 @@ $csrf_token = generateCSRFToken();
                                     <label for="benefits" class="form-label">Benefits & Perks</label>
                                     <textarea class="form-control form-control-animated" id="benefits" name="benefits" rows="3" placeholder="Health insurance, paid time off, retirement plans, etc..."></textarea>
                                 </div>
+                                <div id="view-applications" class="content-section">
+    <!-- Content from the new page goes here -->
+</div>
                                 
                                 <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                                     <button type="button" class="btn btn-secondary me-md-2" id="cancel-btn">Cancel</button>
@@ -1013,7 +1069,7 @@ $csrf_token = generateCSRFToken();
                 <div id="manage-jobs" class="content-section">
                     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                         <h1 class="h2 fw-bold">Manage Job Postings</h1>
-                        <button class="btn btn-primary btn-animated" onclick="showCreateForm()">
+                        <button class="btn btn-primary btn-animated" onclick="showCreateForm()"> <!-- Fixed typo in onclick -->
                             <i class="fas fa-plus me-2"></i>
                             New Job Posting
                         </button>
@@ -1108,566 +1164,885 @@ $csrf_token = generateCSRFToken();
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- PDF.js for CV preview -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
     
-    <script>
-        // Global variables
-        let currentJobs = [];
-        let editingJobId = null;
+   <script>
+    // Global variables
+    let currentJobs = [];
+    let editingJobId = null;
+    let currentApplications = [];
+    let currentJobId = null;
+    let currentApplicationId = null;
 
-        // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeDashboard();
-            setupEventListeners();
-            loadJobs();
-            updateDashboardStats();
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, initializing dashboard');
+        initializeDashboard();
+        setupEventListeners();
+        loadJobs();
+        updateDashboardStats();
+    });
+
+    // Initialize dashboard components
+    function initializeDashboard() {
+        console.log('Initializing dashboard');
+        showSection('dashboard');
+        
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
+    }
 
-        // Initialize dashboard components
-        function initializeDashboard() {
-            showSection('dashboard');
-            
-            // Initialize tooltips
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
+    // Setup event listeners
+    function setupEventListeners() {
+        console.log('Setting up event listeners');
+        
+        // Sidebar navigation
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const section = this.getAttribute('data-section');
+                console.log(`Sidebar link clicked, switching to section: ${section}`);
+                showSection(section);
+                
+                // Update active state
+                document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
             });
-        }
-
-        // Setup event listeners
-        function setupEventListeners() {
-            // Sidebar navigation
-            document.querySelectorAll('.sidebar-link').forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const section = this.getAttribute('data-section');
-                    showSection(section);
-                    
-                    // Update active state
-                    document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-                    this.classList.add('active');
-                });
-            });
-            
-            // Job form submission
-            document.getElementById('job-form').addEventListener('submit', handleJobSubmit);
-            
-            // Cancel button
-            document.getElementById('cancel-btn').addEventListener('click', function() {
-                resetForm();
-                showSection('manage-jobs');
-            });
-            
-            // Search and filter functionality
-            document.getElementById('search-filter').addEventListener('input', debounce(filterJobs, 300));
-            document.getElementById('category-filter').addEventListener('change', filterJobs);
-            document.getElementById('status-filter').addEventListener('change', filterJobs);
-            
-            // Form validation
-            setupFormValidation();
-        }
-
-        // Show specific section
-        function showSection(sectionId) {
-            document.querySelectorAll('.content-section').forEach(section => {
-                section.classList.remove('active');
-            });
-            
-            document.getElementById(sectionId).classList.add('active');
-            
-            if (sectionId === 'manage-jobs') {
-                loadJobs();
-            } else if (sectionId === 'dashboard') {
-                updateDashboardStats();
-                loadRecentJobs();
-            }
-        }
-
-        // Load jobs from server
-        async function loadJobs() {
-            showLoading(true);
-            
-            try {
-                const response = await fetch(window.location.pathname + '?action=get_jobs&t=' + Date.now());
-                const data = await response.json();
-                
-                if (data.success) {
-                    currentJobs = data.data;
-                    renderJobsTable();
-                    showNotification('Jobs loaded successfully', 'success');
-                } else {
-                    showNotification('Error loading jobs: ' + data.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error loading jobs:', error);
-                showNotification('Failed to load jobs. Please try again.', 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Render jobs table
-        function renderJobsTable() {
-            const tbody = document.querySelector('#jobs-table tbody');
-            tbody.innerHTML = '';
-            
-            if (currentJobs.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="text-center py-4">
-                            <i class="fas fa-briefcase fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">No job postings found. Create your first job posting to get started.</p>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-            
-            currentJobs.forEach(job => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>
-                        <strong>${escapeHtml(job.title)}</strong>
-                    </td>
-                    <td>
-                        <span class="badge bg-info">${escapeHtml(job.job_categories || 'Not specified')}</span>
-                    </td>
-                    <td>
-                        <i class="fas fa-map-marker-alt me-1 text-muted"></i>
-                        ${escapeHtml(job.location)}
-                    </td>
-                    <td>
-                        <span class="badge bg-secondary">${escapeHtml(job.job_type)}</span>
-                    </td>
-                    <td>
-                        <span class="status-badge ${job.is_active == 1 ? 'status-active' : 'status-inactive'}">
-                            ${job.is_active == 1 ? 'Active' : 'Inactive'}
-                        </span>
-                    </td>
-                    <td>
-                        ${formatDate(job.created_at)}
-                    </td>
-                    <td>
-                        <button class="btn action-btn btn-edit" onclick="editJob(${job.job_id})" title="Edit Job">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn action-btn btn-toggle" onclick="toggleJobStatus(${job.job_id})" title="Toggle Status">
-                            <i class="fas fa-toggle-${job.is_active == 1 ? 'on' : 'off'}"></i>
-                        </button>
-                        <button class="btn action-btn btn-delete" onclick="deleteJob(${job.job_id})" title="Delete Job">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
-        // Handle job form submission
-        async function handleJobSubmit(e) {
-            e.preventDefault();
-            
-            if (!validateForm()) {
-                return;
-            }
-            
-            const formData = new FormData(this);
-            const submitBtn = document.querySelector('#job-form button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
-            
-            try {
-                const response = await fetch(window.location.pathname, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showNotification(data.message, 'success');
-                    resetForm();
-                    loadJobs();
-                    showSection('manage-jobs');
-                } else {
-                    showNotification('Error: ' + data.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error submitting form:', error);
-                showNotification('Failed to save job posting. Please try again.', 'error');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
-            }
-        }
-
-        // Edit job
-        async function editJob(jobId) {
-            try {
-                const response = await fetch(`${window.location.pathname}?action=get_job&job_id=${jobId}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    const job = data.data;
-                    populateForm(job);
-                    editingJobId = jobId;
-                    document.querySelector('input[name="action"]').value = 'update';
-                    document.getElementById('edit-job-id').value = jobId;
-                    document.getElementById('submit-text').textContent = 'Update Job Posting';
-                    showSection('create-job');
-                } else {
-                    showNotification('Error loading job details: ' + data.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error loading job:', error);
-                showNotification('Failed to load job details.', 'error');
-            }
-        }
-
-        // Populate form with job data
-        function populateForm(job) {
-            document.getElementById('title').value = job.title || '';
-            document.getElementById('location').value = job.location || '';
-            document.getElementById('job_type').value = job.job_type || '';
-            document.getElementById('job_categories').value = job.job_categories || '';
-            document.getElementById('salary').value = job.salary || '';
-            document.getElementById('shift_schedule').value = job.shift_schedule || '';
-            document.getElementById('description').value = job.description || '';
-            document.getElementById('requirements').value = job.requirements || '';
-            document.getElementById('benefits').value = job.benefits || '';
-        }
-
-        // Delete job
-        async function deleteJob(jobId) {
-            if (!confirm('Are you sure you want to delete this job posting? This action cannot be undone.')) {
-                return;
-            }
-            
-            showLoading(true);
-            
-            try {
-                const formData = new FormData();
-                formData.append('action', 'delete');
-                formData.append('job_id', jobId);
-                formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-                
-                const response = await fetch(window.location.pathname, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showNotification(data.message, 'success');
-                    loadJobs();
-                } else {
-                    showNotification('Error: ' + data.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error deleting job:', error);
-                showNotification('Failed to delete job posting.', 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Toggle job status
-        async function toggleJobStatus(jobId) {
-            showLoading(true);
-            
-            try {
-                const formData = new FormData();
-                formData.append('action', 'toggle_status');
-                formData.append('job_id', jobId);
-                formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-                
-                const response = await fetch(window.location.pathname, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showNotification(data.message, 'success');
-                    loadJobs();
-                } else {
-                    showNotification('Error: ' + data.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error toggling job status:', error);
-                showNotification('Failed to update job status.', 'error');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Filter jobs
-        function filterJobs() {
-            const search = document.getElementById('search-filter').value.toLowerCase();
-            const category = document.getElementById('category-filter').value;
-            const status = document.getElementById('status-filter').value;
-            
-            let filteredJobs = currentJobs;
-            
-            if (search) {
-                filteredJobs = filteredJobs.filter(job => 
-                    job.title.toLowerCase().includes(search) || 
-                    job.location.toLowerCase().includes(search)
-                );
-            }
-            
-            if (category) {
-                filteredJobs = filteredJobs.filter(job => job.job_categories === category);
-            }
-            
-            if (status !== '') {
-                filteredJobs = filteredJobs.filter(job => job.is_active == status);
-            }
-            
-            const originalJobs = currentJobs;
-            currentJobs = filteredJobs;
-            renderJobsTable();
-            currentJobs = originalJobs;
-        }
-
-        // Update dashboard statistics
-        function updateDashboardStats() {
-            if (currentJobs.length === 0) {
-                loadJobs().then(() => {
-                    calculateStats();
-                });
-            } else {
-                calculateStats();
-            }
-        }
-
-        // Calculate and display statistics
-        function calculateStats() {
-            const totalJobs = currentJobs.length;
-            const activeJobs = currentJobs.filter(job => job.is_active == 1).length;
-            
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
-            const monthlyJobs = currentJobs.filter(job => {
-                const jobDate = new Date(job.created_at);
-                return jobDate.getMonth() === currentMonth && jobDate.getFullYear() === currentYear;
-            }).length;
-            
-            animateCounter('total-jobs', totalJobs);
-            animateCounter('active-jobs', activeJobs);
-            animateCounter('monthly-jobs', monthlyJobs);
-        }
-
-        // Load recent jobs for dashboard
-        function loadRecentJobs() {
-            const recentJobs = currentJobs.slice(0, 5);
-            const tbody = document.querySelector('#recent-jobs-table tbody');
-            tbody.innerHTML = '';
-            
-            if (recentJobs.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="6" class="text-center py-4">
-                            <i class="fas fa-briefcase fa-2x text-muted mb-2"></i>
-                            <p class="text-muted mb-0">No recent job postings</p>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-            
-            recentJobs.forEach(job => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td><strong>${escapeHtml(job.title)}</strong></td>
-                    <td><span class="badge bg-info">${escapeHtml(job.job_categories || 'Not specified')}</span></td>
-                    <td>${escapeHtml(job.location)}</td>
-                    <td><span class="badge bg-secondary">${escapeHtml(job.job_type)}</span></td>
-                    <td><span class="status-badge ${job.is_active == 1 ? 'status-active' : 'status-inactive'}">${job.is_active == 1 ? 'Active' : 'Inactive'}</span></td>
-                    <td>${formatDate(job.created_at)}</td>
-                `;
-                tbody.appendChild(row);
-            });
-        }
-
+        });
+        
+        // Job form submission
+        document.getElementById('job-form').addEventListener('submit', handleJobSubmit);
+        
+        // Cancel button
+        document.getElementById('cancel-btn').addEventListener('click', function() {
+            console.log('Cancel button clicked, resetting form and switching to manage-jobs');
+            resetForm();
+            showSection('manage-jobs');
+        });
+        
+        // Search and filter functionality
+        document.getElementById('search-filter').addEventListener('input', debounce(filterJobs, 300));
+        document.getElementById('category-filter').addEventListener('change', filterJobs);
+        document.getElementById('status-filter').addEventListener('change', filterJobs);
+        
         // Form validation
-        function validateForm() {
-            const form = document.getElementById('job-form');
-            const requiredFields = form.querySelectorAll('[required]');
-            let isValid = true;
+        setupFormValidation();
+        
+        // View Applications specific listeners
+        document.getElementById('load-applications-btn')?.addEventListener('click', function() {
+            const jobId = document.getElementById('job-selector').value;
+            if (jobId) {
+                loadApplications(jobId);
+            } else {
+                showNotification('Please select a job first', 'error');
+            }
+        });
+        
+        document.getElementById('job-selector')?.addEventListener('change', function() {
+            const jobId = this.value;
+            if (jobId) {
+                currentJobId = jobId;
+                const selectedOption = this.options[this.selectedIndex];
+                document.getElementById('job-title-header').textContent = `Applications for: ${selectedOption.text}`;
+            }
+        });
+        
+        document.getElementById('updateStatusBtn')?.addEventListener('click', updateApplicationStatus);
+    }
+
+    // Show specific section
+    function showSection(sectionId) {
+        console.log(`Attempting to show section: ${sectionId}`);
+        const section = document.getElementById(sectionId);
+        if (!section) {
+            console.error(`Section with ID ${sectionId} not found`);
+            showNotification(`Section ${sectionId} not found. Please check the page structure.`, 'error');
+            return;
+        }
+        
+        document.querySelectorAll('.content-section').forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        section.classList.add('active');
+        console.log(`Section ${sectionId} is now active`);
+        
+        if (sectionId === 'manage-jobs') {
+            loadJobs();
+        } else if (sectionId === 'dashboard') {
+            updateDashboardStats();
+            loadRecentJobs();
+        } else if (sectionId === 'view-applications') {
+            loadJobSelector();
+        }
+    }
+
+    // Load job selector dropdown
+    async function loadJobSelector() {
+    showLoading(true);
+    console.log('Loading job selector data');
+    
+    try {
+        const response = await fetch('admin_dashboard.php?action=get_jobs_with_applications');
+        const data = await response.json();
+        
+        if (data.success) {
+            const selector = document.getElementById('job-selector');
+            if (selector) {
+                selector.innerHTML = '<option value="">-- Select a Job --</option>';
+                
+                data.data.forEach(job => {
+                    const option = document.createElement('option');
+                    option.value = job.job_id;
+                    option.textContent = `${job.title} (${job.application_count} applications)`;
+                    selector.appendChild(option);
+                });
+            }
             
-            requiredFields.forEach(field => {
-                if (!field.value.trim()) {
-                    field.classList.add('is-invalid');
-                    isValid = false;
+            showNotification('Jobs loaded successfully', 'success');
+        } else {
+            showNotification('Error loading jobs: ' + (data.message || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        console.error('Error loading jobs:', error);
+        showNotification('Failed to load jobs. Please try again.', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+    // Load applications for a specific job
+    async function loadApplications(jobId) {
+        showLoading(true);
+        console.log(`Loading applications for job ID: ${jobId}`);
+        
+        try {
+            const response = await fetch(`?action=get_applications&job_id=${jobId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                currentApplications = data.data;
+                renderApplicationsTable();
+                updateApplicationsSummary();
+                
+                // Show the applications summary card
+                document.getElementById('applications-summary-card').style.display = 'block';
+                
+                showNotification('Applications loaded successfully', 'success');
+            } else {
+                showNotification('Error loading applications: ' + data.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error loading applications:', error);
+            showNotification('Failed to load applications. Please try again.', 'error');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // Render applications table
+    function renderApplicationsTable() {
+        const tbody = document.querySelector('#applications-table tbody');
+        tbody.innerHTML = '';
+        
+        if (currentApplications.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="text-center py-4">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No applications found for this job.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        currentApplications.forEach(application => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <strong>${escapeHtml(application.full_name)}</strong>
+                </td>
+                <td>
+                    <div>${escapeHtml(application.email)}</div>
+                    <small class="text-muted">${escapeHtml(application.phone || 'No phone provided')}</small>
+                </td>
+                <td>
+                    ${formatDate(application.application_date)}
+                </td>
+                <td>
+                    <span class="status-badge ${getStatusClass(application.status)}">
+                        ${escapeHtml(application.status)}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn action-btn btn-edit" onclick="viewApplicationDetails(${application.application_id})" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // Update applications summary
+    function updateApplicationsSummary() {
+        const total = currentApplications.length;
+        const newCount = currentApplications.filter(app => app.status === 'Submitted').length;
+        const hiredCount = currentApplications.filter(app => app.status === 'Hired').length;
+        
+        document.getElementById('total-applications').textContent = `${total} Total`;
+        document.getElementById('new-applications').textContent = `${newCount} New`;
+        document.getElementById('hired-applications').textContent = `${hiredCount} Hired`;
+    }
+
+    // View application details
+    async function viewApplicationDetails(applicationId) {
+        showLoading(true);
+        console.log(`Viewing details for application ID: ${applicationId}`);
+        
+        try {
+            const application = currentApplications.find(app => app.application_id == applicationId);
+            if (!application) {
+                throw new Error('Application not found');
+            }
+            
+            currentApplicationId = applicationId;
+            
+            // Populate modal with application data
+            document.getElementById('applicantNameModal').textContent = application.full_name;
+            document.getElementById('modalFullName').textContent = application.full_name;
+            document.getElementById('modalEmail').textContent = application.email;
+            document.getElementById('modalPhone').textContent = application.phone || 'Not provided';
+            document.getElementById('modalJobTitle').textContent = application.job_title;
+            document.getElementById('modalAppliedDate').textContent = formatDate(application.application_date);
+            document.getElementById('modalStatus').innerHTML = `<span class="status-badge ${getStatusClass(application.status)}">${application.status}</span>`;
+            
+            // Set cover letter
+            const coverLetterEl = document.getElementById('modalCoverLetter');
+            if (application.cover_letter) {
+                coverLetterEl.textContent = application.cover_letter;
+            } else {
+                coverLetterEl.innerHTML = '<em>No cover letter provided.</em>';
+            }
+            
+            // Set CV download link
+            const downloadBtn = document.getElementById('downloadCvBtn');
+            if (application.cv_path) {
+                downloadBtn.href = application.cv_path;
+                downloadBtn.style.display = 'inline-block';
+                
+                // Load PDF preview
+                if (application.cv_path.toLowerCase().endsWith('.pdf')) {
+                    loadPdfPreview(application.cv_path);
                 } else {
-                    field.classList.remove('is-invalid');
-                    field.classList.add('is-valid');
+                    document.getElementById('cvPreviewContainer').innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Preview not available for this file type. Please download to view.
+                        </div>
+                    `;
                 }
+            } else {
+                downloadBtn.style.display = 'none';
+                document.getElementById('cvPreviewContainer').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No CV uploaded by applicant.
+                    </div>
+                `;
+            }
+            
+            // Set current status in selector
+            document.getElementById('statusSelector').value = application.status;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('applicationDetailsModal'));
+            modal.show();
+            
+        } catch (error) {
+            console.error('Error loading application details:', error);
+            showNotification('Failed to load application details.', 'error');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+async function updateApplicationStatus() {
+    const newStatus = document.getElementById('statusSelector').value;
+    if (!newStatus || !currentApplicationId) return;
+    
+    showLoading(true);
+    console.log(`Updating application ${currentApplicationId} to status: ${newStatus}`);
+    
+    try {
+        const formData = new FormData();
+        formData.append('action', 'update_application_status');
+        formData.append('application_id', currentApplicationId);
+        formData.append('status', newStatus);
+        formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+        
+        const response = await fetch(window.location.pathname, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Application status updated successfully', 'success');
+            
+            // Update the application in our current list
+            const application = currentApplications.find(app => app.application_id == currentApplicationId);
+            if (application) {
+                application.status = newStatus;
+            }
+            
+            // Refresh the table and summary
+            renderApplicationsTable();
+            updateApplicationsSummary();
+            
+            // Update the status in the modal
+            document.getElementById('modalStatus').innerHTML = `<span class="status-badge ${getStatusClass(newStatus)}">${newStatus}</span>`;
+            document.getElementById('statusSelector').value = newStatus;
+        } else {
+            showNotification('Error: ' + data.message, 'error');
+        }
+    } catch (error) {
+        console.error('Error updating status:', error);
+        showNotification('Failed to update application status.', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+    // Get CSS class for status badge
+    function getStatusClass(status) {
+        switch (status) {
+            case 'Submitted': return 'status-submitted';
+            case 'Under Review': return 'status-review';
+            case 'Shortlisted': return 'status-shortlisted';
+            case 'Rejected': return 'status-rejected';
+            case 'Hired': return 'status-hired';
+            default: return 'status-submitted';
+        }
+    }
+
+    // [Rest of your existing functions remain the same...]
+    // Load jobs from server
+    async function loadJobs() {
+        showLoading(true);
+        console.log('Loading jobs from server');
+        
+        try {
+            const response = await fetch(window.location.pathname + '?action=get_jobs&t=' + Date.now());
+            const data = await response.json();
+            
+            if (data.success) {
+                currentJobs = data.data;
+                renderJobsTable();
+                showNotification('Jobs loaded successfully', 'success');
+            } else {
+                showNotification('Error loading jobs: ' + data.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error loading jobs:', error);
+            showNotification('Failed to load jobs. Please try again.', 'error');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // Render jobs table
+    function renderJobsTable() {
+        const tbody = document.querySelector('#jobs-table tbody');
+        tbody.innerHTML = '';
+        
+        if (currentJobs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <i class="fas fa-briefcase fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No job postings found. Create your first job posting to get started.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        currentJobs.forEach(job => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <strong>${escapeHtml(job.title)}</strong>
+                </td>
+                <td>
+                    <span class="badge bg-info">${escapeHtml(job.job_categories || 'Not specified')}</span>
+                </td>
+                <td>
+                    <i class="fas fa-map-marker-alt me-1 text-muted"></i>
+                    ${escapeHtml(job.location)}
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${escapeHtml(job.job_type)}</span>
+                </td>
+                <td>
+                    <span class="status-badge ${job.is_active == 1 ? 'status-active' : 'status-inactive'}">
+                        ${job.is_active == 1 ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td>
+                    ${formatDate(job.created_at)}
+                </td>
+                <td>
+                    <button class="btn action-btn btn-edit" onclick="editJob(${job.job_id})" title="Edit Job">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn action-btn btn-toggle" onclick="toggleJobStatus(${job.job_id})" title="Toggle Status">
+                        <i class="fas fa-toggle-${job.is_active == 1 ? 'on' : 'off'}"></i>
+                    </button>
+                    <button class="btn action-btn btn-delete" onclick="deleteJob(${job.job_id})" title="Delete Job">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // Handle job form submission
+    async function handleJobSubmit(e) {
+        e.preventDefault();
+        console.log('Job form submitted');
+        
+        if (!validateForm()) {
+            console.log('Form validation failed');
+            return;
+        }
+        
+        const formData = new FormData(this);
+        const submitBtn = document.querySelector('#job-form button[type="submit"]');
+        const submitTextSpan = submitBtn.querySelector('#submit-text');
+        
+        if (!submitBtn || !submitTextSpan) {
+            console.error('Submit button or submit text span not found');
+            showNotification('Form submission failed: Submit button not found.', 'error');
+            return;
+        }
+        
+        const originalText = submitTextSpan.textContent;
+        
+        submitBtn.disabled = true;
+        submitTextSpan.textContent = 'Processing...';
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i><span id="submit-text">Processing...</span>';
+        
+        try {
+            const response = await fetch(window.location.pathname, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            console.log('Server response:', data);
+            
+            if (data.success) {
+                showNotification(data.message, 'success');
+                resetForm();
+                loadJobs();
+                showSection('manage-jobs');
+            } else {
+                showNotification('Error: ' + data.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            showNotification('Failed to save job posting. Please try again. Error: ' + error.message, 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-save me-2"></i><span id="submit-text">' + originalText + '</span>';
+        }
+    }
+
+    // Edit job
+    async function editJob(jobId) {
+        console.log(`Editing job with ID: ${jobId}`);
+        try {
+            const response = await fetch(`${window.location.pathname}?action=get_job&job_id=${jobId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const job = data.data;
+                populateForm(job);
+                editingJobId = jobId;
+                document.querySelector('input[name="action"]').value = 'update';
+                document.getElementById('edit-job-id').value = jobId;
+                document.getElementById('submit-text').textContent = 'Update Job Posting';
+                showSection('create-job');
+            } else {
+                showNotification('Error loading job details: ' + data.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error loading job:', error);
+            showNotification('Failed to load job details.', 'error');
+        }
+    }
+
+    // Populate form with job data
+    function populateForm(job) {
+        console.log('Populating form with job data:', job);
+        document.getElementById('title').value = job.title || '';
+        document.getElementById('location').value = job.location || '';
+        document.getElementById('job_type').value = job.job_type || '';
+        document.getElementById('job_categories').value = job.job_categories || '';
+        document.getElementById('salary').value = job.salary || '';
+        document.getElementById('shift_schedule').value = job.shift_schedule || '';
+        document.getElementById('description').value = job.description || '';
+        document.getElementById('requirements').value = job.requirements || '';
+        document.getElementById('benefits').value = job.benefits || '';
+    }
+
+    // Delete job
+    async function deleteJob(jobId) {
+        if (!confirm('Are you sure you want to delete this job posting? This action cannot be undone.')) {
+            return;
+        }
+        
+        showLoading(true);
+        console.log(`Deleting job with ID: ${jobId}`);
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'delete');
+            formData.append('job_id', jobId);
+            formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+            
+            const response = await fetch(window.location.pathname, {
+                method: 'POST',
+                body: formData
             });
             
-            return isValid;
-        }
-
-        // Setup form validation
-        function setupFormValidation() {
-            const form = document.getElementById('job-form');
-            const inputs = form.querySelectorAll('input, textarea, select');
+            const data = await response.json();
             
-            inputs.forEach(input => {
-                input.addEventListener('blur', function() {
-                    if (this.hasAttribute('required')) {
-                        if (!this.value.trim()) {
-                            this.classList.add('is-invalid');
-                            this.classList.remove('is-valid');
-                        } else {
-                            this.classList.remove('is-invalid');
-                            this.classList.add('is-valid');
-                        }
-                    }
-                });
-                
-                input.addEventListener('input', function() {
-                    if (this.classList.contains('is-invalid') && this.value.trim()) {
+            if (data.success) {
+                showNotification(data.message, 'success');
+                loadJobs();
+            } else {
+                showNotification('Error: ' + data.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting job:', error);
+            showNotification('Failed to delete job posting.', 'error');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // Toggle job status
+    async function toggleJobStatus(jobId) {
+        showLoading(true);
+        console.log(`Toggling status for job with ID: ${jobId}`);
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'toggle_status');
+            formData.append('job_id', jobId);
+            formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+            
+            const response = await fetch(window.location.pathname, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showNotification(data.message, 'success');
+                loadJobs();
+            } else {
+                showNotification('Error: ' + data.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error toggling job status:', error);
+            showNotification('Failed to update job status.', 'error');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // Filter jobs
+    function filterJobs() {
+        console.log('Filtering jobs');
+        const search = document.getElementById('search-filter').value.toLowerCase();
+        const category = document.getElementById('category-filter').value;
+        const status = document.getElementById('status-filter').value;
+        
+        let filteredJobs = currentJobs;
+        
+        if (search) {
+            filteredJobs = filteredJobs.filter(job => 
+                job.title.toLowerCase().includes(search) || 
+                job.location.toLowerCase().includes(search)
+            );
+        }
+        
+        if (category) {
+            filteredJobs = filteredJobs.filter(job => job.job_categories === category);
+        }
+        
+        if (status !== '') {
+            filteredJobs = filteredJobs.filter(job => job.is_active == status);
+        }
+        
+        const originalJobs = currentJobs;
+        currentJobs = filteredJobs;
+        renderJobsTable();
+        currentJobs = originalJobs;
+    }
+
+    // Update dashboard statistics
+    function updateDashboardStats() {
+        console.log('Updating dashboard stats');
+        if (currentJobs.length === 0) {
+            loadJobs().then(() => {
+                calculateStats();
+            });
+        } else {
+            calculateStats();
+        }
+    }
+
+    // Calculate and display statistics
+    function calculateStats() {
+        console.log('Calculating stats');
+        const totalJobs = currentJobs.length;
+        const activeJobs = currentJobs.filter(job => job.is_active == 1).length;
+        
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const monthlyJobs = currentJobs.filter(job => {
+            const jobDate = new Date(job.created_at);
+            return jobDate.getMonth() === currentMonth && jobDate.getFullYear() === currentYear;
+        }).length;
+        
+        animateCounter('total-jobs', totalJobs);
+        animateCounter('active-jobs', activeJobs);
+        animateCounter('monthly-jobs', monthlyJobs);
+    }
+
+    // Load recent jobs for dashboard
+    function loadRecentJobs() {
+        console.log('Loading recent jobs');
+        const recentJobs = currentJobs.slice(0, 5);
+        const tbody = document.querySelector('#recent-jobs-table tbody');
+        tbody.innerHTML = '';
+        
+        if (recentJobs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-4">
+                        <i class="fas fa-briefcase fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">No recent job postings</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        recentJobs.forEach(job => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${escapeHtml(job.title)}</strong></td>
+                <td><span class="badge bg-info">${escapeHtml(job.job_categories || 'Not specified')}</span></td>
+                <td>${escapeHtml(job.location)}</td>
+                <td><span class="badge bg-secondary">${escapeHtml(job.job_type)}</span></td>
+                <td><span class="status-badge ${job.is_active == 1 ? 'status-active' : 'status-inactive'}">${job.is_active == 1 ? 'Active' : 'Inactive'}</span></td>
+                <td>${formatDate(job.created_at)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // Form validation
+    function validateForm() {
+        console.log('Validating form');
+        const form = document.getElementById('job-form');
+        const requiredFields = form.querySelectorAll('[required]');
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+                field.classList.add('is-valid');
+            }
+        });
+        
+        return isValid;
+    }
+
+    // Setup form validation
+    function setupFormValidation() {
+        console.log('Setting up form validation');
+        const form = document.getElementById('job-form');
+        const inputs = form.querySelectorAll('input, textarea, select');
+        
+        inputs.forEach(input => {
+            input.addEventListener('blur', function() {
+                if (this.hasAttribute('required')) {
+                    if (!this.value.trim()) {
+                        this.classList.add('is-invalid');
+                        this.classList.remove('is-valid');
+                    } else {
                         this.classList.remove('is-invalid');
                         this.classList.add('is-valid');
                     }
-                });
-            });
-        }
-
-        // Reset form
-        function resetForm() {
-            const form = document.getElementById('job-form');
-            form.reset();
-            form.classList.remove('was-validated');
-            
-            form.querySelectorAll('.is-valid, .is-invalid').forEach(field => {
-                field.classList.remove('is-valid', 'is-invalid');
-            });
-            
-            document.querySelector('input[name="action"]').value = 'create';
-            document.getElementById('edit-job-id').value = '';
-            document.getElementById('submit-text').textContent = 'Create Job Posting';
-            editingJobId = null;
-        }
-
-        // Show create form
-        function showCreateForm() {
-            resetForm();
-            showSection('create-job');
-        }
-
-        // Utility functions
-        function showLoading(show) {
-            const loading = document.getElementById('loading');
-            if (show) {
-                loading.classList.add('show');
-            } else {
-                loading.classList.remove('show');
-            }
-        }
-
-        function showNotification(message, type = 'info') {
-            const toast = document.getElementById('notification-toast');
-            const toastBody = document.getElementById('toast-message');
-            const toastHeader = toast.querySelector('.toast-header');
-            
-            // Clear any existing classes and set new ones
-            toast.className = 'toast';
-            if (type === 'success') {
-                toast.classList.add('bg-success', 'text-white');
-            } else if (type === 'error') {
-                toast.classList.add('bg-danger', 'text-white');
-            } else if (type === 'warning') {
-                toast.classList.add('bg-warning', 'text-dark');
-            } else {
-                toast.classList.add('bg-primary', 'text-white');
-            }
-            
-            toastBody.textContent = message;
-            
-            const icon = toastHeader.querySelector('i');
-            icon.className = `fas me-2 ${getIconForType(type)}`;
-            
-            const bsToast = new bootstrap.Toast(toast, {
-                autohide: true,
-                delay: 4000
-            });
-            bsToast.show();
-            
-            // Log to console for debugging
-            console.log(`Notification: ${type} - ${message}`);
-        }
-
-        function getIconForType(type) {
-            switch (type) {
-                case 'success':
-                    return 'fa-check-circle text-success';
-                case 'error':
-                    return 'fa-exclamation-circle text-danger';
-                case 'warning':
-                    return 'fa-exclamation-triangle text-warning';
-                default:
-                    return 'fa-info-circle text-primary';
-            }
-        }
-
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-        }
-
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-        }
-
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
-        }
-
-        function animateCounter(elementId, targetValue) {
-            const element = document.getElementById(elementId);
-            const startValue = 0;
-            const duration = 1000;
-            const startTime = performance.now();
-            
-            function updateCounter(currentTime) {
-                const elapsedTime = currentTime - startTime;
-                const progress = Math.min(elapsedTime / duration, 1);
-                const currentValue = Math.floor(startValue + (targetValue - startValue) * progress);
-                
-                element.textContent = currentValue;
-                
-                if (progress < 1) {
-                    requestAnimationFrame(updateCounter);
                 }
-            }
+            });
             
-            requestAnimationFrame(updateCounter);
+            input.addEventListener('input', function() {
+                if (this.classList.contains('is-invalid') && this.value.trim()) {
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                }
+            });
+        });
+    }
+
+    // Reset form
+    function resetForm() {
+        console.log('Resetting form');
+        const form = document.getElementById('job-form');
+        form.reset();
+        form.classList.remove('was-validated');
+        
+        form.querySelectorAll('.is-valid, .is-invalid').forEach(field => {
+            field.classList.remove('is-valid', 'is-invalid');
+        });
+        
+        document.querySelector('input[name="action"]').value = 'create';
+        document.getElementById('edit-job-id').value = '';
+        document.getElementById('submit-text').textContent = 'Create Job Posting';
+        editingJobId = null;
+    }
+
+    // Show create form
+    function showCreateForm() {
+        console.log('Showing create job form');
+        resetForm();
+        showSection('create-job');
+    }
+
+    // Utility functions
+    function showLoading(show) {
+        console.log(`Toggling loading overlay: ${show}`);
+        const loading = document.getElementById('loading');
+        if (show) {
+            loading.classList.add('show');
+        } else {
+            loading.classList.remove('show');
         }
-    </script>
+    }
+
+    function showNotification(message, type = 'info') {
+        console.log(`Showing notification: ${message} (${type})`);
+        const toast = document.getElementById('notification-toast');
+        const toastBody = document.getElementById('toast-message');
+        const toastHeader = toast.querySelector('.toast-header');
+        
+        if (!toast || !toastBody || !toastHeader) {
+            console.error('Toast elements not found');
+            return;
+        }
+        
+        // Clear any existing classes and set new ones
+        toast.className = 'toast';
+        if (type === 'success') {
+            toast.classList.add('bg-success', 'text-white');
+        } else if (type === 'error') {
+            toast.classList.add('bg-danger', 'text-white');
+        } else if (type === 'warning') {
+            toast.classList.add('bg-warning', 'text-dark');
+        } else {
+            toast.classList.add('bg-primary', 'text-white');
+        }
+        
+        toastBody.textContent = message;
+        
+        const icon = toastHeader.querySelector('i');
+        icon.className = `fas me-2 ${getIconForType(type)}`;
+        
+        const bsToast = new bootstrap.Toast(toast, {
+            autohide: true,
+            delay: 4000
+        });
+        bsToast.show();
+        
+        console.log(`Notification: ${type} - ${message}`);
+    }
+
+    function getIconForType(type) {
+        switch (type) {
+            case 'success': return 'fa-check-circle text-success';
+            case 'error': return 'fa-exclamation-circle text-danger';
+            case 'warning': return 'fa-exclamation-triangle text-warning';
+            default: return 'fa-info-circle text-primary';
+        }
+    }
+
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    function animateCounter(elementId, targetValue) {
+        const element = document.getElementById(elementId);
+        const startValue = 0;
+        const duration = 1000;
+        const startTime = performance.now();
+        
+        function updateCounter(currentTime) {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            const currentValue = Math.floor(startValue + (targetValue - startValue) * progress);
+            
+            element.textContent = currentValue;
+            
+            if (progress < 1) {
+                requestAnimationFrame(updateCounter);
+            }
+        }
+        
+        requestAnimationFrame(updateCounter);
+    }
+</script>
 </body>
-</html>
+</html>    
